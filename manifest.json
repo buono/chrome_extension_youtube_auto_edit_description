@@ -22,7 +22,7 @@
   "content_scripts": [
     {
       "matches": ["https://studio.youtube.com/*"],
-      "js": ["content_simple.js"],
+      "js": ["content_multipage.js"],
       "run_at": "document_idle"
     }
   ]
