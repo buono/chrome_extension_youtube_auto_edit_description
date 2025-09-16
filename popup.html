@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>YouTube動画説明欄自動編集</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube動画説明欄<br>自動編集ツール</h1>
+        
+        <div class="status-section">
+            <div class="status-text">ステータス: <span id="status">準備完了</span></div>
+            <div class="progress-info">
+                <span id="progress">0</span> / <span id="total">0</span> 動画処理済み
+            </div>
+        </div>
+
+        <div class="options-section">
+            <label class="checkbox-label">
+                <input type="checkbox" id="onlyPublic" checked>
+                公開中の動画のみ処理
+            </label>
+        </div>
+
+        <div class="edit-mode-section">
+            <label class="section-label">編集モード</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="editMode" value="prepend" checked>
+                    先頭に追加
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="editMode" value="append">
+                    末尾に追加
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="editMode" value="replace">
+                    置換
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="editMode" value="delete">
+                    削除
+                </label>
+            </div>
+        </div>
+
+        <div class="text-input-section">
+            <div id="insertSection">
+                <label for="insertText" class="section-label">挿入する文字列</label>
+                <textarea id="insertText" rows="10" placeholder="説明欄に追加する文字列を入力してください">====== 電子工作コミュニティメンバ募集中 ======
+2024年12月、新しく「電子工作で人生豊かにするラボ」というコミュニティを立ち上げました！
+https://discord.gg/nt5SNtQF3u
+
+単に電子工作を学べるだけでなく、電子工作を通して人生が少しでも豊かになるような場にしたいと思っています。
+以下のような悩みを抱えている方はぜひご参加頂ければと思います！
+・AIを活用してさらに電子工作を楽しみたい！
+・実現したいことはあるが、電子工作の知識がなくて進められない
+・アラフォーなのに技術力不足・経験不足で今後のキャリアに悩んでいる
+・自分の強みが見つからず、5年後に今の会社で活躍している姿がイメージできない
+・物事に熱狂できない
+・大人になって友達が作れない
+
+上記のような悩みをお持ちの方であれば、電子工作経験の有無や職業、年齢、性別は一切問いません。
+どなたでも無料で参加できるので、ご興味のある方はどしどしご参加ください👍 
+※Discordというコミュニケーションアプリを使います（PC、スマホどちらでも可）
+========================================</textarea>
+            </div>
+            
+            <div id="replaceSection" style="display: none;">
+                <label for="searchText" class="section-label">検索する文字列</label>
+                <textarea id="searchText" rows="3" placeholder="置換または削除する文字列を入力"></textarea>
+            </div>
+        </div>
+
+        <div class="button-container">
+            <button id="startBtn" class="btn btn-primary">処理開始</button>
+            <button id="stopBtn" class="btn btn-stop" disabled>停止</button>
+        </div>
+
+        <div class="info-section">
+            <p class="info-text">
+                このツールはYouTube Studioのコンテンツページで動作します。
+                処理を開始する前に、YouTube Studioのコンテンツページを開いてください。
+            </p>
+        </div>
+
+        <div id="message" class="message"></div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>

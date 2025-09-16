@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube動画説明欄自動編集",
+  "version": "1.0.0",
+  "description": "YouTubeチャンネルの動画説明欄に自動で文言を挿入します",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://studio.youtube.com/*",
+    "https://www.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://studio.youtube.com/*"],
+      "js": ["content_simple.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
