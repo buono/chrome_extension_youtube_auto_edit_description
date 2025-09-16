@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 編集モードUIの更新
     function updateEditModeUI(mode) {
         const searchLabel = replaceSection.querySelector('label[for="searchText"]');
+        const insertLabel = insertSection.querySelector('label[for="insertText"]');
         
         if (mode === 'replace' || mode === 'delete') {
             replaceSection.style.display = 'block';
@@ -64,12 +65,18 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 insertSection.style.display = 'block';
                 if (searchLabel) {
-                    searchLabel.textContent = '検索する文字列';
+                    searchLabel.textContent = '置換前の文字列（これを探して↓）';
+                }
+                if (insertLabel) {
+                    insertLabel.textContent = '置換後の文字列（↑これに置き換える）';
                 }
             }
         } else {
             replaceSection.style.display = 'none';
             insertSection.style.display = 'block';
+            if (insertLabel) {
+                insertLabel.textContent = '挿入する文字列';
+            }
         }
     }
 
@@ -137,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         if (selectedMode === 'replace' && (!searchText || !insertText)) {
-            showMessage('検索する文字列と置換後の文字列を両方入力してください。', 'error');
+            showMessage('置換前の文字列と置換後の文字列を両方入力してください。', 'error');
             return;
         }
         if ((selectedMode === 'prepend' || selectedMode === 'append') && !insertText) {
