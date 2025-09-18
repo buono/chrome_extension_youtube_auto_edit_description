@@ -48,7 +48,13 @@ h1 {
     color: #6c757d;
 }
 
-#progress, #total {
+.page-progress-info {
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+#progress, #total, #currentPage, #totalPages {
     font-weight: bold;
     color: #007bff;
 }
@@ -237,4 +243,71 @@ h1 {
 
 #replaceSection {
     margin-top: 15px;
+}
+
+.page-range-section {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.range-inputs {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.range-input-group {
+    flex: 1;
+}
+
+.range-input-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.range-input-group input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.range-input-group input[type="number"]:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.specific-input-group {
+    margin-top: 10px;
+}
+
+.specific-input-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.specific-input-group input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.specific-input-group input[type="text"]:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
 }

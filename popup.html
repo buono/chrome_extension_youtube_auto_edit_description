@@ -14,6 +14,9 @@
             <div class="progress-info">
                 <span id="progress">0</span> / <span id="total">0</span> 動画処理済み
             </div>
+            <div class="page-progress-info" id="pageProgressSection" style="display: none;">
+                <span id="currentPage">0</span> / <span id="totalPages">0</span> ページ終了
+            </div>
         </div>
 
         <div class="options-section">
@@ -21,6 +24,44 @@
                 <input type="checkbox" id="onlyPublic" checked>
                 公開中の動画のみ処理
             </label>
+            
+            <div class="page-range-section">
+                <label class="section-label">対象ページ</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="pageMode" value="all" checked>
+                        全ページ
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pageMode" value="range">
+                        範囲指定
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pageMode" value="specific">
+                        特定ページ
+                    </label>
+                </div>
+                
+                <div id="rangeSection" style="display: none;">
+                    <div class="range-inputs">
+                        <div class="range-input-group">
+                            <label for="startPage">開始ページ</label>
+                            <input type="number" id="startPage" min="1" value="1">
+                        </div>
+                        <div class="range-input-group">
+                            <label for="endPage">終了ページ</label>
+                            <input type="number" id="endPage" min="1" value="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="specificSection" style="display: none;">
+                    <div class="specific-input-group">
+                        <label for="specificPages">ページ番号（カンマ区切り）</label>
+                        <input type="text" id="specificPages" placeholder="例: 1,3,5">
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="edit-mode-section">

@@ -52,7 +52,11 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
         chrome.storage.local.set({
             editMode: request.editMode,
             insertText: request.insertText,
-            searchText: request.searchText
+            searchText: request.searchText,
+            pageMode: request.pageMode,
+            startPage: request.startPage,
+            endPage: request.endPage,
+            specificPages: request.specificPages
         });
         
         // 複数ページ処理フラグを設定
@@ -62,7 +66,7 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
         localStorage.removeItem('yt_current_index');
         localStorage.removeItem('yt_all_collected_urls');
         
-        await collectAllPagesVideos(request.onlyPublic);
+        await collectAllPagesVideos(request.onlyPublic, request.pageMode, request.startPage, request.endPage, request.specificPages);
         sendResponse({ success: true });
     } else if (request.action === 'stopContentProcessing') {
         localStorage.removeItem('yt_video_urls');
@@ -74,38 +78,163 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
     return true;
 });
 
+// 総ページ数をページ情報から計算する関数
+async function getTotalPageCount() {
+    console.log('総ページ数を取得中...');
+    
+    await waitForPageLoad();
+    
+    // ページ情報を取得（例: "1～30/合計約 136"）
+    const pageDescriptions = [
+        '.page-description',
+        '.style-scope.ytcp-table-footer .page-description',
+        'span.page-description',
+        'ytcp-table-footer span:contains("合計")',
+        'ytcp-table-footer span:contains("total")'
+    ];
+    
+    let pageInfo = null;
+    for (const selector of pageDescriptions) {
+        const element = document.querySelector(selector);
+        if (element && element.textContent) {
+            pageInfo = element.textContent.trim();
+            console.log('ページ情報を発見:', pageInfo);
+            break;
+        }
+    }
+    
+    // ページ情報が見つからない場合は、テキストで検索
+    if (!pageInfo) {
+        const allSpans = document.querySelectorAll('span');
+        for (const span of allSpans) {
+            const text = span.textContent.trim();
+            if (text.includes('合計') || text.includes('total') || text.match(/\d+～\d+\/\d+/)) {
+                pageInfo = text;
+                console.log('テキスト検索でページ情報を発見:', pageInfo);
+                break;
+            }
+        }
+    }
+    
+    if (!pageInfo) {
+        console.log('ページ情報が見つかりません。デフォルトで1ページとします');
+        return 1;
+    }
+    
+    // ページ情報から総動画数と1ページあたりの表示数を抽出
+    // 例: "1～30/合計約 136" → 総動画数136、1ページあたり30
+    let totalVideos = 0;
+    let videosPerPage = 30; // デフォルト
+    
+    // パターン1: "1～30/合計約 136" や "1～30/136"
+    const pattern1 = /(\d+)～(\d+)\/(?:合計約?\s*)?(\d+)/;
+    const match1 = pageInfo.match(pattern1);
+    if (match1) {
+        const startNum = parseInt(match1[1]);
+        const endNum = parseInt(match1[2]);
+        totalVideos = parseInt(match1[3]);
+        videosPerPage = endNum - startNum + 1;
+    }
+    
+    // パターン2: "合計 136" や "total 136"
+    if (!match1) {
+        const pattern2 = /(?:合計|total)[\s約]*(\d+)/i;
+        const match2 = pageInfo.match(pattern2);
+        if (match2) {
+            totalVideos = parseInt(match2[1]);
+        }
+    }
+    
+    if (totalVideos === 0) {
+        console.log('総動画数を取得できませんでした。デフォルトで1ページとします');
+        return 1;
+    }
+    
+    // 総ページ数を計算
+    const totalPages = Math.ceil(totalVideos / videosPerPage);
+    
+    console.log(`総動画数: ${totalVideos}, 1ページあたり: ${videosPerPage}, 総ページ数: ${totalPages}`);
+    return totalPages;
+}
+
+
 // すべてのページから動画を収集
-async function collectAllPagesVideos(onlyPublic) {
+async function collectAllPagesVideos(onlyPublic, pageMode = 'all', startPage = 1, endPage = 1, specificPages = '') {
     try {
-        console.log('全ページの動画収集を開始...');
+        console.log('全ページの動画収集を開始...', { pageMode, startPage, endPage, specificPages });
         let allVideoUrls = [];
-        let hasNextPage = true;
-        let pageCount = 1;
         
-        while (hasNextPage) {
-            console.log(`ページ ${pageCount} を処理中...`);
-            
+        // 対象ページリストを作成
+        let targetPages = [];
+        if (pageMode === 'all') {
+            targetPages = null; // 全ページ対象
+        } else if (pageMode === 'range') {
+            for (let i = startPage; i <= endPage; i++) {
+                targetPages.push(i);
+            }
+        } else if (pageMode === 'specific') {
+            targetPages = specificPages.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p > 0);
+        }
+        
+        console.log('対象ページ:', targetPages);
+        
+        // 総ページ数を取得中であることを通知
+        chrome.runtime.sendMessage({
+            action: 'updatePageProgress',
+            currentPage: 0,
+            totalPages: 0,
+            phase: 'scanning'
+        });
+        
+        // 総ページ数を取得
+        console.log('getTotalPageCount()を呼び出します...');
+        let totalPages;
+        let actualTotalPages;
+        try {
+            actualTotalPages = await getTotalPageCount(); // 実際の総ページ数を取得
+            console.log(`実際の総ページ数: ${actualTotalPages}`);
+        } catch (error) {
+            console.error('getTotalPageCount()でエラー:', error);
+            actualTotalPages = 1; // エラー時は1ページとして扱う
+        }
+        
+        if (pageMode === 'all') {
+            totalPages = actualTotalPages;
+        } else if (pageMode === 'range') {
+            // 範囲が実際のページ数を超えていないかチェック
+            const validEndPage = Math.min(endPage, actualTotalPages);
+            totalPages = validEndPage - startPage + 1;
+            console.log(`範囲指定: ${startPage}-${validEndPage} (${totalPages}ページ)`);
+        } else if (pageMode === 'specific') {
+            // 指定されたページが実際に存在するかチェック
+            const validPages = targetPages.filter(p => p <= actualTotalPages);
+            targetPages = validPages;
+            totalPages = validPages.length;
+            console.log(`特定ページ: ${validPages.join(',')} (${totalPages}ページ)`);
+        }
+        
+        // 1ページ目のみから動画を収集（ページ遷移を行わない）
+        console.log('1ページ目から動画を収集中...');
+        await waitForPageLoad();
+        
+        // ページが対象かチェック（1ページ目のみ）
+        const shouldProcessPage = targetPages === null || targetPages.includes(1);
+        
+        if (shouldProcessPage) {
             // 現在のページの動画を収集
-            await waitForPageLoad();
             const currentPageVideos = await collectVideosOnCurrentPage(onlyPublic);
             allVideoUrls = allVideoUrls.concat(currentPageVideos);
-            console.log(`ページ ${pageCount}: ${currentPageVideos.length} 個の動画を収集`);
+            console.log(`1ページ目: ${currentPageVideos.length} 個の動画を収集`);
             
-            // 次のページボタンを探す
-            const nextButton = document.querySelector('[aria-label="次のページ"]') ||
-                             document.querySelector('.next-button') ||
-                             document.querySelector('[aria-label="Next page"]') ||
-                             document.querySelector('ytcp-button[aria-label*="次"]');
-            
-            if (nextButton && !nextButton.disabled && !nextButton.hasAttribute('disabled')) {
-                console.log('次のページへ移動...');
-                nextButton.click();
-                await sleep(3000); // ページ読み込みを待つ
-                pageCount++;
-            } else {
-                console.log('最後のページに到達');
-                hasNextPage = false;
-            }
+            // ページ進捗を更新
+            chrome.runtime.sendMessage({
+                action: 'updatePageProgress',
+                currentPage: 1,
+                totalPages: actualTotalPages,
+                phase: 'collecting'
+            });
+        } else {
+            console.log('1ページ目: スキップ（対象外）');
         }
         
         console.log(`全ページから合計 ${allVideoUrls.length} 個の動画を収集しました`);
@@ -126,6 +255,13 @@ async function collectAllPagesVideos(onlyPublic) {
             progress: 0,
             total: allVideoUrls.length
         });
+        
+        // 少し待ってから動画処理フェーズに切り替え（ページ進捗を一瞬表示させる）
+        setTimeout(() => {
+            chrome.runtime.sendMessage({
+                action: 'hidePageProgress'
+            });
+        }, 1000);
         
         // 最初の動画を開く
         console.log(`最初の動画を処理します: ${allVideoUrls[0].title}`);
@@ -222,6 +358,8 @@ function processNextVideo() {
         console.log(`次の動画へ移動 (${nextIndex + 1}/${videoUrls.length}): ${nextVideo.title}`);
         
         localStorage.setItem('yt_current_index', nextIndex.toString());
+        
+        // 動画処理フェーズではページ進捗は更新しない（動画進捗のみ）
         
         setTimeout(() => {
             window.location.href = nextVideo.href;

@@ -15,7 +15,11 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
             onlyPublic: request.onlyPublic,
             editMode: request.editMode,
             insertText: request.insertText,
-            searchText: request.searchText
+            searchText: request.searchText,
+            pageMode: request.pageMode,
+            startPage: request.startPage,
+            endPage: request.endPage,
+            specificPages: request.specificPages
         });
         
         sendResponse({ success: true });
@@ -43,6 +47,19 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
             action: 'updateProgress',
             progress: request.progress,
             total: request.total
+        });
+        
+    } else if (request.action === 'updatePageProgress') {
+        chrome.runtime.sendMessage({
+            action: 'updatePageProgress',
+            currentPage: request.currentPage,
+            totalPages: request.totalPages,
+            phase: request.phase
+        });
+        
+    } else if (request.action === 'hidePageProgress') {
+        chrome.runtime.sendMessage({
+            action: 'hidePageProgress'
         });
         
     } else if (request.action === 'processingComplete') {
