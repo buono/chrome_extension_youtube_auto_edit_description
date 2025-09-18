@@ -178,12 +178,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     startBtn.addEventListener('click', async function() {
+        console.log('処理開始ボタンがクリックされました');
+        
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        console.log('現在のタブURL:', tab.url);
         
         if (!tab.url.includes('studio.youtube.com')) {
+            console.log('YouTube Studio以外のページです');
             showMessage('YouTube Studioのコンテンツページを開いてから実行してください。', 'error');
             return;
         }
+        
+        console.log('YouTube Studioページを確認しました');
 
         // 選択された編集モードを取得
         const selectedMode = document.querySelector('input[name="editMode"]:checked').value;
@@ -256,6 +262,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // バックグラウンドスクリプトにメッセージを送信
+        console.log('バックグラウンドスクリプトにメッセージを送信します:', {
+            action: 'startProcessing',
+            tabId: tab.id,
+            editMode: selectedMode,
+            pageMode: pageMode
+        });
+        
         chrome.runtime.sendMessage({
             action: 'startProcessing',
             tabId: tab.id,
@@ -267,6 +280,13 @@ document.addEventListener('DOMContentLoaded', function() {
             startPage: startPage,
             endPage: endPage,
             specificPages: specificPages
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('バックグラウンドスクリプトへのメッセージ送信エラー:', chrome.runtime.lastError);
+                showMessage('バックグラウンドスクリプトとの接続に失敗しました: ' + chrome.runtime.lastError.message, 'error');
+            } else {
+                console.log('バックグラウンドスクリプトからの応答:', response);
+            }
         });
     });
 

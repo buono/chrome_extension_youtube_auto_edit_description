@@ -1,8 +1,22 @@
 let processingTabId = null;
 
 chrome.runtime.onMessage.addListener(async function(request, sender, sendResponse) {
+    console.log('バックグラウンドスクリプトでメッセージを受信:', request.action);
+    
     if (request.action === 'startProcessing') {
+        console.log('処理開始リクエストを受信 - タブID:', request.tabId);
         processingTabId = request.tabId;
+        
+        // まずコンテンツスクリプトが注入されているか確認
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: processingTabId },
+                files: ['content_multipage.js']
+            });
+            console.log('コンテンツスクリプトを注入しました');
+        } catch (error) {
+            console.log('コンテンツスクリプトは既に注入済みまたは注入エラー:', error);
+        }
         
         chrome.storage.local.set({
             isProcessing: true,
@@ -10,6 +24,7 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
             total: 0
         });
         
+        console.log('コンテンツスクリプトにメッセージを送信します');
         chrome.tabs.sendMessage(processingTabId, {
             action: 'startContentProcessing',
             onlyPublic: request.onlyPublic,
@@ -20,15 +35,35 @@ chrome.runtime.onMessage.addListener(async function(request, sender, sendRespons
             startPage: request.startPage,
             endPage: request.endPage,
             specificPages: request.specificPages
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('コンテンツスクリプトへのメッセージ送信エラー:', chrome.runtime.lastError);
+                chrome.runtime.sendMessage({
+                    action: 'error',
+                    message: 'コンテンツスクリプトとの接続に失敗しました: ' + chrome.runtime.lastError.message
+                });
+            } else if (!response) {
+                console.error('コンテンツスクリプトからの応答がありません');
+                chrome.runtime.sendMessage({
+                    action: 'error',
+                    message: 'コンテンツスクリプトが応答しませんでした'
+                });
+            } else {
+                console.log('コンテンツスクリプトとの接続成功:', response);
+            }
         });
         
         sendResponse({ success: true });
         
     } else if (request.action === 'stopProcessing') {
         if (processingTabId) {
-            chrome.tabs.sendMessage(processingTabId, {
-                action: 'stopContentProcessing'
-            });
+            try {
+                chrome.tabs.sendMessage(processingTabId, {
+                    action: 'stopContentProcessing'
+                });
+            } catch (error) {
+                console.error('停止メッセージ送信エラー:', error);
+            }
         }
         
         chrome.storage.local.set({

@@ -43,11 +43,15 @@ if (currentUrl.includes('/video/') && currentUrl.includes('/edit')) {
             const videoUrls = JSON.parse(localStorage.getItem('yt_video_urls') || '[]');
             const currentIndex = parseInt(localStorage.getItem('yt_current_index') || '0');
             try {
-                chrome.runtime.sendMessage({
-                    action: 'updateProgress',
-                    progress: currentIndex + 1,
-                    total: videoUrls.length
-                });
+                try {
+                    chrome.runtime.sendMessage({
+                        action: 'updateProgress',
+                        progress: currentIndex + 1,
+                        total: videoUrls.length
+                    });
+                } catch (error) {
+                    console.warn('メッセージ送信エラー:', error);
+                }
             } catch (error) {
                 console.warn('メッセージ送信エラー:', error);
             }
@@ -269,24 +273,37 @@ async function collectAllPagesVideos(onlyPublic, pageMode = 'all', startPage = 1
                 console.warn('メッセージ送信エラー:', error);
             }
         } else {
-            // 指定されたページのみ処理（最初のページのみ）
+            // 指定されたページの範囲すべてを処理
             console.log('ページ範囲指定モード:', targetPages);
             
             if (targetPages && targetPages.length > 0) {
-                const firstTargetPage = targetPages[0];
-                console.log(`指定された最初のページ ${firstTargetPage} に移動します`);
-                
-                // 指定されたページに移動
-                if (firstTargetPage > 1) {
-                    await navigateToPage(firstTargetPage);
+                for (let i = 0; i < targetPages.length; i++) {
+                    const pageNum = targetPages[i];
+                    console.log(`ページ ${pageNum} (${i + 1}/${targetPages.length}) に移動して動画を収集します`);
+                    
+                    // 指定されたページに移動
+                    await navigateToPage(pageNum);
                     await sleep(3000);
                     await waitForPageLoad();
+                    
+                    // 動画を収集
+                    console.log(`ページ ${pageNum} での動画収集を開始...`);
+                    const currentPageVideos = await collectVideosOnCurrentPage(onlyPublic);
+                    allVideoUrls = allVideoUrls.concat(currentPageVideos);
+                    console.log(`ページ ${pageNum}: ${currentPageVideos.length} 個の動画を収集 (累計: ${allVideoUrls.length}個)`);
+                    
+                    // ページ進捗を更新
+                    try {
+                        chrome.runtime.sendMessage({
+                            action: 'updatePageProgress',
+                            currentPage: i + 1,
+                            totalPages: targetPages.length,
+                            phase: 'collecting'
+                        });
+                    } catch (error) {
+                        console.warn('メッセージ送信エラー:', error);
+                    }
                 }
-                
-                // 動画を収集
-                const currentPageVideos = await collectVideosOnCurrentPage(onlyPublic);
-                allVideoUrls = allVideoUrls.concat(currentPageVideos);
-                console.log(`ページ ${firstTargetPage}: ${currentPageVideos.length} 個の動画を収集`);
             }
         }
         
@@ -312,11 +329,15 @@ async function collectAllPagesVideos(onlyPublic, pageMode = 'all', startPage = 1
         
         // 総数をバックグラウンドに送信
         try {
-            chrome.runtime.sendMessage({
-                action: 'updateProgress',
-                progress: 0,
-                total: allVideoUrls.length
-            });
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'updateProgress',
+                    progress: 0,
+                    total: allVideoUrls.length
+                });
+            } catch (error) {
+                console.warn('メッセージ送信エラー:', error);
+            }
         } catch (error) {
             console.warn('メッセージ送信エラー:', error);
         }
@@ -355,10 +376,14 @@ async function collectAllPagesVideos(onlyPublic, pageMode = 'all', startPage = 1
         
         // バックグラウンドにエラーを送信
         try {
-            chrome.runtime.sendMessage({
-                action: 'error',
-                message: 'エラーが発生しました: ' + error.message
-            });
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'error',
+                    message: 'エラーが発生しました: ' + error.message
+                });
+            } catch (messageError) {
+                console.warn('メッセージ送信エラー:', messageError);
+            }
         } catch (error) {
             console.warn('メッセージ送信エラー:', error);
         }
@@ -430,6 +455,10 @@ async function collectVideosOnCurrentPage(onlyPublic) {
             'a[href*="/video/"]',
             'a[href*="watch?v="]',
             'a[href*="studio.youtube.com"]',
+            'a[href*="/content/"]',
+            'ytcp-video-title a',
+            'div[id*="video-title"] a',
+            '[aria-label*="タイトル"] a',
             'a',  // 最後の手段として全てのaタグ
         ];
         
@@ -438,13 +467,20 @@ async function collectVideosOnCurrentPage(onlyPublic) {
         
         for (const selector of linkSelectors) {
             const link = row.querySelector(selector);
-            if (link && link.href && (link.href.includes('/video/') || link.href.includes('watch?v='))) {
+            if (link && link.href && (
+                link.href.includes('/video/') || 
+                link.href.includes('watch?v=') || 
+                link.href.includes('/content/') ||
+                link.href.includes('studio.youtube.com')
+            )) {
                 editLink = link;
-                if (selector === 'a#video-title') {
+                if (selector === 'a#video-title' || selector === 'ytcp-video-title a') {
                     titleLink = link;
                 }
                 console.log(`リンク発見: ${selector} -> ${link.href}`);
                 break;
+            } else if (link && link.href) {
+                console.log(`リンク除外: ${selector} -> ${link.href} (条件に合わず)`);
             }
         }
         
@@ -462,7 +498,22 @@ async function collectVideosOnCurrentPage(onlyPublic) {
             continue;
         }
         
-        const title = titleLink ? titleLink.textContent.trim() : '不明';
+        // タイトルを取得（複数の方法を試行）
+        let title = '不明';
+        if (titleLink && titleLink.textContent.trim()) {
+            title = titleLink.textContent.trim();
+        } else if (editLink && editLink.textContent.trim()) {
+            title = editLink.textContent.trim();
+        } else {
+            // 他のタイトル要素を検索
+            const titleElements = row.querySelectorAll('#video-title, [id*="title"], [aria-label*="タイトル"]');
+            for (const element of titleElements) {
+                if (element.textContent.trim()) {
+                    title = element.textContent.trim();
+                    break;
+                }
+            }
+        }
         const editUrl = editLink.href.includes('/edit') ? editLink.href : editLink.href + '/edit';
         
         console.log('動画タイトル:', title);
@@ -761,9 +812,13 @@ function processNextVideo() {
         
         // 完了通知を送信
         try {
-            chrome.runtime.sendMessage({
-                action: 'processingComplete'
-            });
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'processingComplete'
+                });
+            } catch (error) {
+                console.warn('メッセージ送信エラー:', error);
+            }
         } catch (error) {
             console.warn('メッセージ送信エラー:', error);
         }
